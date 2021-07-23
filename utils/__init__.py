@@ -33,12 +33,28 @@ __doc__ = """
     | UPnP-arch-DeviceArchitecture-v2.0
 """
 
-#define UDP_MCAST
+# define UDP_MCAST
 UDP_MCAST_ADDR = '239.255.255.250'
 UDP_SSDP_PORT = 1900
 
 IPV4_MCAST_IP = UDP_MCAST_ADDR
 IPV6_MCAST_IP = 'ff02::c'
+
+# error codes defined in UPnP-Architecture v2.0 below
+# see page 82
+INVALID_ACTION = 401
+INVALID_ARGS = 402
+DEPRECATED = 403
+ACTION_FAILED = 501
+ARG_VALUE_INVALID = 600
+ARG_VALUE_OUTOFRANGE = 601
+NOT_IMPLEMENTED = 602 # Optional Action Not Implemented
+OUT_OF_MEMORY = 603
+INTERVENTION_REQUIRED = 604
+ARG_TOO_LONG = 605
+DEV_SECURITY = [606, 612]
+COMMON_ACTION_ERRORS = [613, 699]
+ACTION_ERRORS = [700, 899]
 
 #errors below
 E_ERR_UNKNOWN = 0
@@ -56,6 +72,7 @@ E_ERR_WEBAUTH = 11
 E_ERR_MALFORMEDSCPD = 12
 E_ERR_NOMETHOD = 13
 E_ERR_NOSERVICENAME = 14
+E_ERR_MALFORMEDDEV = 15
 
 ERROR_STR = [
     '[!] Unknown error occured.',
@@ -69,8 +86,9 @@ ERROR_STR = [
     '[!] No target specified!',
     '[!] IP-Address malformed! ({0})',
     '[!] No service-descritpion(s) found!',
-    '[!] Warning: exception while fetching a website (maybe it requires authorization). url: {0}',
+    '[!] Warning: exception while fetching a website (maybe it requires authorization). url: {}',
     '[!] Malformed service-descritpion loaded!',
     '[!] No method is specified!',
-    '[!] Please specify the service-name!'
+    '[!] Please specify the service-name!',
+    '[!] Malformed device description skipped.'
 ]

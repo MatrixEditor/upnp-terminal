@@ -1,4 +1,5 @@
 import argparse
+from os import access
 import sys
 import requests
 
@@ -15,12 +16,14 @@ else:
     SEP = '/'
 
 # allowed/implemented commands:
-# dcov -t/--target TARGET [--st ST] [--print-all] [--scpd] [--on-save] [--url-fuzz]
-# ctr -t/--target TARGET -m/--method METHOD -s/--service SERVICE [--arg ARGS] [--schema SCHEMA]
-# msearch [-t/--host TARGET] [-p/--port PORT] [--man MAN] [--st ST] [--mx MX] [-o/--out PATH]
-# userach [-t/--host TARGET] [-p/--port PORT] [--man MAN] [--st ST] [-o/--out PATH]
-# wget URL [-o/--out PATH]
-# upnp-uuid [no arguments after command]
+#       dcov -t/--target TARGET [--st ST] [--print-all] [--scpd] [--on-save] [--url-fuzz]
+#       ctr -t/--target TARGET -m/--method METHOD -s/--service SERVICE [--arg ARGS] [--schema SCHEMA]
+#       msearch [-t/--host TARGET] [-p/--port PORT] [--man MAN] [--st ST] [--mx MX] [-o/--out PATH]
+#       userach [-t/--host TARGET] [-p/--port PORT] [--man MAN] [--st ST] [-o/--out PATH]
+#       wget URL [-o/--out PATH]
+#       upnp-uuid [no arguments after command]
+#       ls -t/--target TARGET [-s/--service SERVICE] [-o/--out PATH]
+#       
 msearch_defaults = {
     'host': UDP_MCAST_ADDR,
     'port': UDP_SSDP_PORT,
@@ -40,7 +43,10 @@ usearch_defaults = {
 }
 
 # Add your own fancy prompt here
-prompt='$:UPnP[system]> '
+if sys.platform == 'win32':
+    prompt='$:UPnP[system]> '
+else:
+    prompt='┌─(root@UPnP#system)─[~]\n └───$ '
 
 class UPnPArgumentParser(argparse.ArgumentParser):
     def __init__(self,
@@ -68,6 +74,7 @@ argpsr_notify = UPnPArgumentParser('notify')
 argpsr_dcov = UPnPArgumentParser('dcov')
 argpsr_ctr = UPnPArgumentParser('ctr')
 argpsr_wget = UPnPArgumentParser('wget')
+argpsr_ls = UPnPArgumentParser('ls')
 
 udp_client = UDP.UDPMulticastClient()
 
@@ -127,6 +134,12 @@ def add_dcov_arg():
     group.add_argument('--scpd', help='Tries to resolve all service descriptions in detail.', action='store_true')
     group.add_argument('--url-fuzz', help='Tries URL-Fuzzing if code 404 is delivered.', action='store_true')
 
+def add_ls_arg():
+    group = argpsr_ls.add_argument_group()
+    group.add_argument('-t', '--target', required=True, help='The target host address')
+    group.add_argument('-s', '--service', help='The service to look for.')
+    group.add_argument('-o', '--out', help='The output path.')
+
 def get_msearch_args():
     n = argparse.Namespace()
     for d in msearch_defaults:
@@ -168,6 +181,112 @@ def validate(ip: str):
             return False
     except:
         return False
+
+# if a description-page is not located at for example at
+# http://xx/path_node/description.xml when the base
+# url is http://xx/path_node/main.xml, then more tries
+# are made by this code below by taking each additional
+# path_node away and make a http-request.
+def url_fuzz(url_base, scpd_list):
+    def fetch_rec(x):
+        def do_fetch(b):
+            try:
+                # make the full request by adding the 'http'
+                # tag at the beginning
+                c = 'http://%s' % ('/'.join(b))
+                p = requests.get(c)
+            except:
+                return (c, None)
+            else:
+                # The status code has to 200 or something
+                # else, but never 404
+                print('   \t\t[%s -> %s]' % (p.status_code, c))
+                if p.status_code == 404:
+                    return (c, None)
+                else:
+                    # if everything went well, the page-text is
+                    # delivered as string
+                    return (c, p.text)
+
+        z = do_fetch(b=x)
+        if not z[1]:
+            # 'X' is the url without the 'http' tag
+            b = z[0][7:].split('/')
+
+            # first, check if there is a file located in 
+            # the url-path
+            if '.' in b[len(b) - 1]: 
+                # Then check if there are any path_nodes left . 
+                # Base length is [address, path_node, file] if
+                # another request could be made.
+                if len(b) >= 3:
+                    b[len(b) - 2] = b[len(b) - 1]
+                    b = b[:-1]
+                else:
+                    return None
+            else:
+                # In this case a '/' is at the end of the url:
+                # parts: [address, path_node, '']
+                if len(b) >= 3:
+                    if '' == b[len(b) - 1]:
+                        b = b[:-2]
+                    else:
+                        b[len(b) - 2] = b[len(b) - 1]
+                        b = b[:-1]
+                else:
+                    return None
+            return do_fetch(b=b)
+        else:
+            return z
+
+    # the function below generates all possible urls with
+    # swapping the 'path_nodes' in a given url. 
+    def make_lists(x):
+        # the address and target shouldn't be affected
+        t = x[0]; h = x[len(x) - 1]
+        x = x[1:-1]; z = []
+        if len(x) > 0:
+            for i in range(0, len(x)):
+                head = x[i]
+                r = [head]
+                for i in range(0, len(x)):
+                    tail = x[i]
+                    if head != tail:
+                        r.append(tail)
+                c = 'http://%s/%s/%s' % (t, '/'.join(r), h)
+                if c not in z:
+                    z.append(c)
+        else:
+            z.append('http://%s/%s' % (t ,h))
+        return z
+            
+    # The real funtion is defined below:
+    # with this code, only services with a positive
+    # url-fetching result are added  
+    def run_rec(x):
+        a = x
+        while True:
+            d = fetch_rec(a.split('/'))
+            if not d:
+                break
+            else:
+                if not d[1]:
+                    # removing the 'http://'-tag
+                    a = d[0][7:]
+                else:
+                    try:
+                        s = scpd.scpd(device.toxml(d[1]))
+                        scpd_list.append([s, d[0]])
+                    except:
+                        error(E_ERR_MALFORMEDSCPD)
+                    break
+
+    a = url_base[7:]
+    _urls = make_lists(a.split('/'))
+    for u in _urls:
+        # prevent errors
+        if len(u) != 0:
+            run_rec(u[7:])
 
 def __msearch__(args):
     print("\nMULTICAST-Search with SSDP-packets v0.3.2")
@@ -433,8 +552,6 @@ def __dcov__(args):
         if d[0].get(NODE_SERVICE_LIST):
             for s in d[0].get(NODE_SERVICE_LIST):
                 services.append((s, d[1]))
-        else:
-            print("no service list")
 
     print("Node\t\t\tValue(s)\n%s\t\t\t%s" % ('-'*4, '-'*8))
     for s in stats:
@@ -492,103 +609,7 @@ def __dcov__(args):
                     print('%s\t\t%s' % (page.status_code, surl))
                     if str(page.status_code) == '404':
                         if args.url_fuzz:
-                            # if a description-page is not located at for example at
-                            # http://xx/path_node/description.xml when the base
-                            # url is http://xx/path_node/main.xml, then more tries
-                            # are made by this code below by taking each additional
-                            # path_node away and make a http-request.
-                            def fetch_recursive(x):
-                                # 'X' is the url without the 'http' tag
-                                b = x
-
-                                # first, check if there is a file located in 
-                                # the url-path
-                                if '.' in b[len(b) - 1]: 
-                                    # Then check if there are any path_nodes left . 
-                                    # Base length is [address, path_node, file] if
-                                    # another request could be made.
-                                    if len(b) >= 3:
-                                        b[len(b) - 2] = b[len(b) - 1]
-                                        b = b[:-1]
-                                    else:
-                                        # returns None if there isn't any url 
-                                        # that can be checked
-                                        return None
-                                else:
-                                    # In this case a '/' is at the end of the url:
-                                    # parts: [address, path_node, '']
-                                    if len(b) >= 3:
-                                        if '' == b[len(b) - 1]:
-                                            b = b[:-2]
-                                        else:
-                                            b[len(b) - 2] = b[len(b) - 1]
-                                            b = b[:-1]
-                                    else:
-                                        return None
-                                try:
-                                    # make the full request by adding the 'http'
-                                    # tag at the beginning
-                                    c = 'http://%s' % ('/'.join(b))
-                                    p = requests.get(c)
-                                except:
-                                    return (c, None)
-                                else:
-                                    # The status code has to 200 or something
-                                    # else, but never 404
-                                    print('   \t\t[%s -> %s]' % (p.status_code, c))
-                                    if p.status_code == 404:
-                                        return (c, None)
-                                    else:
-                                        # if everything went well, the page-text is
-                                        # delivered as string
-                                        return (c, p.text)
-
-                            # the function below generates all possible urls with
-                            # swapping the 'path_nodes' in a given url. 
-                            def make_lists(x):
-                                # the address and target shouldn't be affected
-                                t = x[0]; h = x[len(x) - 1]
-                                x = x[1:-1]; z = []
-                                if len(x) > 0:
-                                    for i in range(0, len(x)):
-                                        head = x[i]
-                                        r = [head]
-                                        for i in range(0, len(x)):
-                                            tail = x[i]
-                                            if head != tail:
-                                                r.append(tail)
-                                        c = 'http://%s/%s/%s' % (t, '/'.join(r), h)
-                                        if c not in z:
-                                            z.append(c)
-                                return z
-                                    
-                            # The real recursive funtion is defined below:
-                            # with this code, only services with a positive
-                            # url-fetching result are added  
-                            def run_rec(x):
-                                a = x
-                                while True:
-                                    d = fetch_recursive(a.split('/'))
-                                    if not d:
-                                        break
-                                    else:
-                                        if not d[1]:
-                                            # removing the 'http://'-tag
-                                            a = d[0][7:]
-                                        else:
-                                            try:
-                                                s = scpd.scpd(device.toxml(d[1]))
-                                                scpds.append((s, d[0]))
-                                            except:
-                                                error(E_ERR_MALFORMEDSCPD)
-                                            break
-                        
-                            a = surl[7:]
-                            _urls = make_lists(a.split('/'))
-                            for u in _urls:
-                                # prevent errors
-                                if len(u) != 0:
-                                    run_rec(u[7:])
+                            url_fuzz(surl, scpds)
                         else:
                             error(E_ERR_WEB404)
                     else:
@@ -782,7 +803,7 @@ def __ctr__(args):
     page = requests.post(url='http://%s' % (_target), headers=header_set, data=body_set)
     try:
         doc = minidom.parseString(page.text)
-        print('[*] Response:\n\n%s\n' % (doc.toxml()))
+        print('[*] Response:\n\n%s\n' % (doc.toprettyxml()))
     except:
         error(E_ERR_WEBAUTH, True)
 
@@ -819,10 +840,156 @@ def __upnpid__():
     print("\nUPnP-UUID Generator v0.0.0.0.0.1")
     print("[*] UUID: %s" % (upnpid.uuid()))
 
-#TODO
-def __auto_search__(args):
-    pass
+def __ls__(args):
+    # this function searches for methods in service-descriptions 
+    # and tries to make a cmmandline example into a file
+    print('\nStarting UPnP Service-Methods descriptor')
 
+    _target = args.target
+    if not _target or not validate(_target):
+        error(E_ERR_MALFORMEDIP)
+    print("[*] Collecting packets...")
+    # First we have to collect information about the device and its 
+    # url location by sending ssdp-packets
+    urls = []
+    def islocated(l):
+        for pair in urls:
+            if pair[0] == l:
+                return True
+        return False
+
+    for data, addr in ssdp.msearch(udp_client):
+        # looking for only one specific ip-address
+        if addr[0] == _target:
+            p = ssdp.SSDPPacket(bytes.decode(data), addr[0], addr[1])
+            loc = p.get(ssdp.NOTIFY_LOCATION)
+
+            if loc and not islocated(loc):
+                # Adding the url with the packet in a tuple
+                urls.append((loc, p))
+    
+    if len(urls) == 0:
+        error(E_ERR_NOURLS)
+        return
+
+    # Now, if a specific service is given, only that description
+    # is taken and analyzed
+    _service = args.service
+    services = []
+    current = len(services)
+    print('[*] Resolving urls...')
+    for u, p in urls:
+        try:
+            page = requests.get(url=str(u))
+        except Exception as e:
+            error(E_ERR_WEBAUTH, args=u)
+        else:
+            # if status code is not 404 the locating process
+            # was successfull
+            if page.status_code != 404:
+                try:
+                    d = device.device(device.toxml(page.text))
+                except:
+                    error(E_ERR_MALFORMEDDEV)
+                else:
+                    # now we need to perform a lookup to services
+                    # stored in that device and if its the same as
+                    # prvided through the user-input  
+                    _s = d.get(NODE_SERVICE_LIST)
+                    if _s:
+                        def gain_scpd(_ser):
+                            ser = _ser
+                            base = u
+                            #removing the last '/' if present
+                            if base[len(base) - 1] == '/':
+                                base = base[:-1]
+                            else:
+                                # else split everything after 'http://' and 
+                                # remove the last element (if this element
+                                # contains a '.')
+                                e = base[7:].split('/')
+                                if '.' in e[len(e) - 1]: 
+                                    base = 'http://%s' % ('/'.join(e[:-1]))
+
+                            # formatting the scpd-url:
+                            # if the node-value of this url doesn't contain
+                            # a '/' at beginning, this has to be added
+                            a = ser.get(SER_SCPD_URL)
+                            if a:
+                                # now we have the same problem as described in __dcov__()
+                                # url-fuzzing is enabled on default
+                                scpdurl = '%s%s' % (base, a if a[0] == '/' else '/%s' % (a))
+                                url_fuzz(scpd_list=services, url_base=scpdurl)
+
+                        for _ser in _s:
+                            # two checkpoints are provided by default:
+                            # type: urn:schema:service:xxx:1
+                            _t = _ser.get(SER_SERVICE_TYPE)
+                            if _t:
+                                _t = _t.split(':')[3]
+                                if _service and _t == _service:
+                                    gain_scpd(_ser=_ser)
+                                    if len(services) > current:
+                                        services[current][1] = _t
+                                        current += 1
+                                    break
+                                else:
+                                    if not _service:
+                                        gain_scpd(_ser=_ser)
+                                        if len(services) > current:
+                                            a = _ser.get(SER_CONTROL_URL)
+                                            b = services[current][1]
+                                            # the url mechanism should update in future
+                                            z = 'http://%s%s' % (b[7:].split('/')[0], a if a[0] == '/' else '/%s' % (a))
+                                            
+                                            services[current][1] = _t
+                                            services[current].append(z)
+                                            current += 1
+
+    print("\n[*] Checking commands...")
+    # We've collected now all the services needed to analyze
+    cmds = []
+    def add_command(ac: scpd.Action, sv_name, url):
+        a_name = ac.get(NODE_NAME)
+        arg_list = ac.get(NODE_ARGUMENT_LIST)
+
+        _in = []
+        for arg in arg_list:
+            if arg.get(NODE_DIRECTION) == 'in':
+                _in.append(arg.get(NODE_NAME) + ':VALUE')
+                
+        c = 'ctr -t %s -m %s -s %s' % (url[7:], a_name, sv_name)
+        if len(_in) > 0:
+            c += ' --arg %s' % (','.join(_in))
+        if c not in cmds:
+            cmds.append(c)
+
+    for s, name, z in services:
+        al = s.get(NODE_ACTION_LIST)
+        # the state-variables aren't that important
+        if al:
+            for action in al:
+                add_command(action, name, z)
+
+    if len(cmds) != 0:
+        print("[*] Found some commands:")
+        for c in cmds:
+            print('  (>) %s' % (c))
+
+        o = args.out
+        if o:
+            print("[*] Trying to save current session...")
+            try:
+                f = open(o, 'w')
+                for c in cmds:
+                    f.write('%s\n' % (c))
+                f.close()
+                print('[*] Successfully saved!')
+            except:
+                error(IO_ERR_DENIED)
+        else:
+            error(IO_ERR_NOUTPUT)
+    
 # don't look at the code below here
 def _react(line: str):
     if line[0] == 'msearch':
@@ -857,6 +1024,12 @@ def _react(line: str):
             __ctr__(args)
     elif line[0] == 'upnp-uuid':
         __upnpid__()
+    elif line[0] == 'ls':
+        if line[1] == '-h':
+            let_parse(argpsr_ls, ['-h'])
+        else:
+            args = let_parse(argpsr_ls, line[1:])
+            __ls__(args)
     elif line[0] == 'exit':
         exit(0)
     elif line[0] == 'wget':
@@ -870,7 +1043,7 @@ if __name__ == '__main__':
     # adding the arguments to the parsers when calling
     # those methods
     add_ctr_arg(); add_dcov_arg(); add_msearch_arg()
-    add_notify_arg(); add_usearch_arg()
+    add_notify_arg(); add_usearch_arg(); add_ls_arg()
     add_wget_arg()
     print()
 

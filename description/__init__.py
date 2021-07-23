@@ -12,7 +12,7 @@ __doc__ = """
 
     [device.py]:
     Here, two main classes are important. First, the 'device' class
-    contains al related information for a UPnP-device loaded from 
+    contains all related information for a UPnP-device loaded from 
     the xml-file. Second, the 'service' class defines a sevice 
     located and specified by a device. If this service contains a 
     SCPD-URL node, the next file could get important.
