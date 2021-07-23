@@ -2,6 +2,7 @@ import argparse
 from os import access
 import sys
 import requests
+import description
 
 from utils import ssdp, UDP, soap, upnpid
 from utils import *
@@ -9,6 +10,8 @@ from description import device, scpd
 from description import *
 from xml.dom import minidom
 from string import whitespace
+
+import utils
 
 if sys.platform == 'win32':
     SEP = '\\'
@@ -23,7 +26,7 @@ else:
 #       wget URL [-o/--out PATH]
 #       upnp-uuid [no arguments after command]
 #       ls -t/--target TARGET [-s/--service SERVICE] [-o/--out PATH]
-#       
+#       --info
 msearch_defaults = {
     'host': UDP_MCAST_ADDR,
     'port': UDP_SSDP_PORT,
@@ -1038,6 +1041,9 @@ def _react(line: str):
             __wget__(args=args)
         else:
             let_parse(argpsr_wget, ['-h'])
+    elif line[0] == '--info':
+        print('\n%s\n\n%s' % (utils.__doc__, description.__doc__))
+
 
 if __name__ == '__main__':
     # adding the arguments to the parsers when calling
@@ -1049,7 +1055,7 @@ if __name__ == '__main__':
 
     while True:
         # define your own prompt if you want your own one
-        # see line 42
+        # see line 45
         next = input(prompt)
 
         if not next:
