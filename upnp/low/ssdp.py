@@ -1,8 +1,10 @@
 from string import whitespace
 from requests import get
-from utils import UDP_SSDP_PORT, UDP_MCAST_ADDR
 
-#region SSDP
+UDP_MCAST_ADDR = '239.255.255.250'
+UDP_SSDP_PORT = 1900
+
+# region SSDP
 SSDP_HEAD_NOTIFY = 'NOTIFY'
 SSDP_HEAD_MSEARCH = 'M-SEARCH'
 SSDP_HTTP = 'HTTP/1.1'
@@ -13,15 +15,15 @@ SSDP_UPDATE = 'ssdp:update'
 SSDP_ALL = 'ssdp:all'
 SSDP_DISCOVER = 'ssdp:discover'
 
-SSDP_TTL = 2 # page 31 l.24
+SSDP_TTL = 2  # page 31 l.24
 
-#region NOTIFY
+# region NOTIFY
 # These fields are required in a NOTIFY-Packet
 NOTIFY_HOST = 'HOST'
 NOTIFY_CACHE_CONTROL = 'CACHE-CONTROL'
 NOTIFY_LOCATION = 'LOCATION'
 NOTIFY_NT = 'NT'
-NOTIFY_NTS = 'NTS' # either 'ssdp:alive' or 'ssdp:byebye' (rare 'ssdp:update')
+NOTIFY_NTS = 'NTS'  # either 'ssdp:alive' or 'ssdp:byebye' (rare 'ssdp:update')
 NOTIFY_SERVER = 'SERVER'
 NOTIFY_USN = 'USN'
 
@@ -37,14 +39,14 @@ NOTIFY_SECURELOCATION = 'SECURELOCATION.UPNP.ORG'
 # required field in ssdp:update-NOTIFY message
 NOTIFY_NEXTBOOTID = 'NEXTBOOTID.UPNP.ORG'
 
-#region SEARCH
+# region SEARCH
 # These fields are required in a SEARCH-Packet
 SEARCH_HOST = NOTIFY_HOST
-SEARCH_MAN = 'MAN' # always with double quotes, e.g. "ssdp:discover"
+SEARCH_MAN = 'MAN'  # always with double quotes, e.g. "ssdp:discover"
 SEARCH_MX = 'MX'
-SEARCH_ST = 'ST' # refer to page 36 for more information
+SEARCH_ST = 'ST'  # refer to page 36 for more information
 
-#didn't see this field, but it should be required
+# didn't see this field, but it should be required
 SEARCH_CPFN = 'CPFN.UPNP.ORG'
 
 # allowed fields below
@@ -52,11 +54,13 @@ SEARCH_USER_AGENT = 'USER-AGENT'
 SEARCH_TCPPORT = 'TCPPORT.UPNP.ORG'
 SEARCH_CPUUID = 'CPUUID.UPNP.ORG'
 
+
 def escapeCLRF(data: str) -> list:
     if not data:
         return
     else:
         return data.replace("\r", "").split("\n")
+
 
 def malformed(header: str) -> bool:
     if SSDP_HEAD_NOTIFY in header or SSDP_HEAD_MSEARCH in header:
@@ -65,6 +69,7 @@ def malformed(header: str) -> bool:
         return False
     else:
         return True
+
 
 class SSDPHeader(object):
     def __init__(self, head: str) -> None:
@@ -82,17 +87,20 @@ class SSDPHeader(object):
             self.end = parts[2]
         else:
             print("[!] Reading an empty header.")
-            self.start = 'None' # be printable and throw no error
+            self.start = 'None'  # be printable and throw no error
             self.spec = 'None'
             self.end = 'None'
 
     def __str__(self) -> str:
         return ' '.join([self.start, self.spec, self.end])
 
+
 class SSDPPacket(object):
     def __init__(self, data: str, host, port) -> None:
         super().__init__()
 
+        self.fields = None
+        self.header = None
         self.host = host
         self.port = port
         self.load(data)
@@ -112,7 +120,7 @@ class SSDPPacket(object):
             return
         self.header = SSDPHeader(message[0])
 
-        #Now remove the header for iterating purposes
+        # Now remove the header for iterating purposes
         message = message[1:]
         self.fields = dict()
         for field in message:
@@ -120,20 +128,20 @@ class SSDPPacket(object):
                 continue
             else:
                 i = field.index(':')
-                
+
                 # this prevents getting errors when searching fields
-                fname = field[:i].upper() 
+                fname = field[:i].upper()
                 fvalue = field[i + 1:]
                 if fvalue:
-                    if fvalue[0] in whitespace: #escape whitespace at start
+                    if fvalue[0] in whitespace:  # escape whitespace at start
                         fvalue = fvalue[1:]
                 self.fields.setdefault(fname, fvalue)
 
     def show(self):
-        indent = ' '*4
+        indent = ' ' * 4
 
         print("[>] SSDP-Packet (Host: %s | Port: %s) (Header: %s)" % (self.host, self.port,
-                     self.header.__str__() if self.header != None else 'None'))
+                                                                      self.header.__str__() if self.header != None else 'None'))
         if self.fields == None:
             print("%s[*] No message fields" % (indent))
         else:
@@ -144,7 +152,7 @@ class SSDPPacket(object):
     def head(self) -> SSDPHeader:
         return self.header
 
-    def get(self, attr: str):
+    def get(self, attr: str) -> object:
         try:
             return self.fields[attr]
         except:
@@ -152,16 +160,17 @@ class SSDPPacket(object):
 
     def __str__(self) -> str:
         repr = ""
-        indent = ' '*4
+        indent = ' ' * 4
 
         repr += "[>] SSDP-Packet (Host: %s | Port: %s) (Header: %s)" % (self.host, self.port,
-                     self.header.__str__() if self.header != None else 'None')
+                                                                        self.header.__str__() if self.header != None else 'None')
         if self.fields == None:
             repr += "\n%s[*] No message fields" % (indent)
         else:
             for k in self.fields:
                 repr += "\n%s| %s: %s" % (indent, k, self.fields[k])
         return repr
+
 
 def locate(packet: SSDPPacket):
     if packet.head():
@@ -171,7 +180,7 @@ def locate(packet: SSDPPacket):
             location = packet.fields[NOTIFY_LOCATION]
 
             if location:
-                #requests HTTP-get
+                # requests HTTP-get
                 page = get(location)
 
                 if not page:
@@ -180,6 +189,7 @@ def locate(packet: SSDPPacket):
                     return (page.headers, page.text)
             else:
                 print("[!] No location found")
+
 
 def searchpayload(host=UDP_MCAST_ADDR, port=UDP_SSDP_PORT, man=SSDP_DISCOVER, st=SSDP_ALL, mx=2):
     payload = None
@@ -200,9 +210,11 @@ def searchpayload(host=UDP_MCAST_ADDR, port=UDP_SSDP_PORT, man=SSDP_DISCOVER, st
         ).format(SSDP_HEAD_MSEARCH, SSDP_HTTP, host, port, man, st)
     return payload.encode("UTF-8")
 
-def notifypayload(location, server, uuid, host=UDP_MCAST_ADDR, port=UDP_SSDP_PORT, cache=1800, nt='upnp:rootdevice', nts=SSDP_ALIVE, usn='upnp:rootdevice'):
+
+def notifypayload(location, server, uuid, host=UDP_MCAST_ADDR, port=UDP_SSDP_PORT, cache=1800, nt='upnp:rootdevice',
+                  nts=SSDP_ALIVE, usn='upnp:rootdevice'):
     payload = (
-      "{} * {}"
+        "{} * {}"
         "HOST: {}:{}"
         "CACHE-CONTROL: max-age={}"
         "LOCATION: {}"
@@ -213,7 +225,8 @@ def notifypayload(location, server, uuid, host=UDP_MCAST_ADDR, port=UDP_SSDP_POR
     ).format(host, port, cache, location, nt, nts, f'uuid:{uuid}:{server}', f'uuid:{uuid}:{usn}')
     return payload.encode("UTF-8")
 
-#'urn:schemas-upnp-org:device:InternetGatewayDevice:1'
+
+# 'urn:schemas-upnp-org:device:InternetGatewayDevice:1'
 def msearch(client, host=UDP_MCAST_ADDR, port=UDP_SSDP_PORT, st=SSDP_ALL, man=SSDP_DISCOVER, mx=2) -> list:
     '''
     Default implementation for multicast-search via SSDP
@@ -222,6 +235,7 @@ def msearch(client, host=UDP_MCAST_ADDR, port=UDP_SSDP_PORT, st=SSDP_ALL, man=SS
     if client and data:
         client.bsend(data)
         return [x for x in client.recv()]
+
 
 def usearch(client, host=UDP_MCAST_ADDR, port=UDP_SSDP_PORT, man=SSDP_DISCOVER, st=SSDP_ALL) -> list:
     '''
@@ -232,9 +246,11 @@ def usearch(client, host=UDP_MCAST_ADDR, port=UDP_SSDP_PORT, man=SSDP_DISCOVER, 
         client.bsend(data)
         return [x for x in client.recv()]
 
-def notify(client,  location, uuid, server, host=UDP_MCAST_ADDR, port=UDP_SSDP_PORT, cache=1800, nt='upnp:rootdevice', nts=SSDP_ALIVE, usn='upnp:rootdevice'):
-    data = notifypayload(host=host, port=port, location=location, 
-    nt=nt, nts=nts, uuid=uuid, usn=usn, server=server)
+
+def notify(client, location, uuid, server, host=UDP_MCAST_ADDR, port=UDP_SSDP_PORT, cache=1800, nt='upnp:rootdevice',
+           nts=SSDP_ALIVE, usn='upnp:rootdevice'):
+    data = notifypayload(host=host, port=port, location=location,
+                         nt=nt, nts=nts, uuid=uuid, usn=usn, server=server)
     if client and data:
         client.bsend(data)
         return [x for x in client.recv()]

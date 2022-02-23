@@ -1,89 +1,83 @@
-# upnp-terminal
+# UPnP-terminal
 
-To use this code you have to install python requests and download this repository. With 'py terminal.py' you can start the program.
+To use this code you have to install python `requests` and download this repository. With 'py upnpTerminal.py' you can start the program. 
+There are different options how to start the program. With `--info` additional information about the project are displayed and `--empty`
+will start the program in manual mode in the future.
 
-## dcov
+After the database is initialized with the received data from the network, an interpreter is started. You will start in the `system`
+-context. Enter the name of the context you want to switch to and `exit` to get back to the default one. The usage
+can be seen with `help` in each context.
 
-The UPnP-Disocery command searches for the given target device (via ip-address) and extracts all relevant information about it. The syntax is as follows:
+There are three contexts implemented:
 
-> dcov -t/--target TARGET [--st ST] [--print-all] [--scpd] [--url-fuzz] [--on-save]
+### msearch 
 
-The *--print-all* argument indicates that every detail that is gathered should be printed and with *--on-save* a folder with several files and information is created in the same directory. If you enable the search for service descriptions (do that with with *--scpd*) it is recommended to also enable url-fuzzing with *--url-fuzz*. To understand why this option should be enabled see code line **185**.
+---
 
-As a result, all possible methods that can be invoked through you are printed and all stored state-variables are given. Possible output (at the end):
+The MSearchContext (name: `msearch`) is used to analyze the received packets during the collection process. The following commands are implemented:
+    
+    > hosts [--save PATH]
 
-    [...]
-    Service no.2: (http://<IP-ADDRESS>:8080/RenderingControl/scpd.xml)
-        >> Action-list found:
-            + GetMute(InstanceID: A_ARG_TYPE_InstanceID, Channel: A_ARG_TYPE_Channel):
-                    return [CurrentMute: Mute]
+    save              writes all collected hosts to the specified path
+                      (format=XXX will be added in the future)
 
-            + GetVolume(InstanceID: A_ARG_TYPE_InstanceID, Channel: A_ARG_TYPE_Channel):
-                    return [CurrentVolume: Volume]
-    [...]
+### devices
 
-If you want to know what meaning these values have, refer to code at lines 628 ff.
+---
 
-## ctr
+The DeviceContext (name: `devices`) is used to get detailed information about collected devices, services and service-descriptions. The 
+commands are the following ones:
+    
+    > device [--host HOST] [--name NAME]
 
-The control command tries to invoke a method given by input at the specified host and prints the result of that action. Syntax:
+    host               the host-address is used to get all devices
+                       from that address.
+    name               searches for devices wth the given name. If both
+                       options are set only 'host' is used
+    all                prints all information about stored services
+                        
 
-> ctr -t/--target TARGET_URL -m/--method METHOD_NAME -s/--service SERVICE_NAME [--arg ARGS] [-o/--out PATH]
+    > service [--name NAME]
 
-The result is of type 'xml' and it's recommended to save files in xml-style. The Error-Codes are defined in the *__init__.py* file in the *utils* module and described in UPnP-Device-Architecture V2 on page 82.
+    name              only services with the given name will be printed. 
 
-## msearch
+                          
+    > scpd [--host HOST_ADDRESS] [--name NAME] [--code PATH] 
 
-This command is probably the most useful one among the defined commands because here the network is scanned of possible UPnP-devices and its representation URLs. Syntax:
+    host              prints all service-presentation-descriptions linked 
+                      to the host
+    name              only services with the given name are printed. It 
+                      is recommended to use both options in order to get 
+                      less output (it will be huge).
+    code              creates a pseudocode document with all actions and
+                      variables
 
-> msearch [-t/--host TARGET] [-p/--port PORT] [--man MAN] [--st ST] [--mx MX] [-o/--out PATH]
+### control
 
-Some of the arguments are described in the *ssdp.py* file, but to get a better understanding refer to the UPnP-Device-Architecture paper. 
+---
 
-Possible output for 'msearch' (only typing command is enough for the system):
+The ControlContext is used to execute commands on UPnP-Devices. To get a
+feeling of the structure of the declared functions just use the 'code'
+option on 'scpd' in the DeviceContext. This generates a file with pseudocode
+with all global type-definitions and declared methods.
+    
+The 'exe' command uses the method-name as an identifier to collect all other 
+details like 'serviceType' or 'controlURL'. If some arguments are required
+the parameter-name is the same as defined in the pseudocode. 
 
-    [...]
-    Address                 Server-type
-    -------                 -----------
-    192...                  Linux/3.8.8, UPnP/1.0, Portable SDK for UPnP devices/1.6.19
-    192...                  Linux/3.14.43+ UPnP/1.0 GUPnP/1.0.5
-    192...                  FOS/1.0 UPnP/1.0 Jupiter/6.5
+Let's consider the following example: 
+        
+    string A_ARG_TYPE_InstanceID
 
-    [*] Found some URL-representations: amount: 12
-    Address                 URL-location
-    -------                 ------------
-    192...                  http://<IP-ADDRESS>:8080/dd.xml
-    [...]
+If an argument of the example type is required, the following structure should
+be used:
 
-Please do not use the *usearch* command.
+    --argv InstanceID:someString
+  
+The following commands are implemented:
+    
+    > exe --method METHOD [--argv ParamName:Value[,ParamName:Value[,...]]]
 
-## wget
-
-A simple command to fetch and download web-urls (and to save it in a separate file). 
-Syntax:
-
-> wget URL [-o/--out PATH]
-
-## upnp-uuid
-
-Just type the command name and get a fully quialified UUID which is used by devices to identify themselves.
-
-## ls
-
-The 'list' command lists all possible methods that can be invooked through the *ctr* command and prints them in a very kind format, so you can copy and invoke them.
-Syntax:
-
-> ls -t/--target TARGET_ADDRESS [-s/--service SERVICE_NAME] [-o/--out PATH]
-
-Possible output from 'ls -t 127.0.0.1':
-
-    [...]
-    [*] Found some commands:
-        (>) ctr -t 127.0.0.1:8091/AVTransport/Control -m GetMediaInfo -s AVTransport --arg InstanceID:VALUE
-
-        (>) ctr -t 127.0.0.1:8091/AVTransport/Control -m GetMediaInfo_Ext -s AVTransport --arg InstanceID:VALUE
-
-        (>) ctr -t 127.0.0.1:8091/AVTransport/Control -m GetTransportInfo -s AVTransport --arg InstanceID:VALUE
-
-        (>) ctr -t 127.0.0.1:8091/AVTransport/Control -m GetPositionInfo -s AVTransport --arg InstanceID:VALUE
-    [...]
+    method            specifies the method name
+    argv              if arguments are required, this option has to be used.
+                      the structure is described above

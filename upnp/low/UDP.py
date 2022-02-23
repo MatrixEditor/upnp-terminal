@@ -1,8 +1,11 @@
 import struct
 import socket
 
-from utils import *
+UDP_MCAST_ADDR = '239.255.255.250'
+UDP_SSDP_PORT = 1900
 
+IPV4_MCAST_IP = UDP_MCAST_ADDR
+IPV6_MCAST_IP = 'ff02::c'
 
 SO_BINDTODEVICE = getattr(socket, "SO_BINDTODEVICE", 25)
 

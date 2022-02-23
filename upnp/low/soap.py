@@ -1,16 +1,19 @@
+from typing import Dict
 from xml.dom.minidom import Document
 
-def soap_header(upnp_schema: str, action: str, schema_group='schemas-upnp-org') -> str:
+def soap_header(upnp_schema: str, action: str, ) -> Dict[str, str]:
     return {
         'User-Agent': 'OS/version, UPnP/1.0, MiniUPnPc/1.5',
-        'SOAPAction': '"urn:{0}:{1}:1#{2}"'.format(schema_group, upnp_schema, action),
+        'SOAPAction': '"{}#{}"'.format(upnp_schema, action),
         'Content-Type': 'text/xml',
         'Connection': 'Close',
         'Cache-Control': 'no-cache',
         'Pragma': 'no-cache',
         }
 
-def soap_body(upnp_schema: str, action: str, arguments=[], schema_group='schemas-upnp-org'):
+def soap_body(upnp_schema: str, action: str, arguments=None):
+    if arguments is None:
+        arguments = []
     doc = Document()
 
     env = doc.createElementNS('', 's:Envelope')
@@ -19,7 +22,7 @@ def soap_body(upnp_schema: str, action: str, arguments=[], schema_group='schemas
 
     body = doc.createElementNS('', 's:Body')
     fn = doc.createElementNS('', f'u:{action}')
-    fn.setAttribute('xmlns:u', 'urn:{}:service:{}:1'.format(schema_group, upnp_schema))
+    fn.setAttribute('xmlns:u', upnp_schema)
 
     a_list = []
 
