@@ -58,7 +58,8 @@ __control_ctx_doc__ = """
   
     The following commands are implemented:
     
-    > exe --method METHOD [--argv ParamName:Value[,ParamName:Value[,...]]]
+    > exe --method METHOD --host HOST [--argv ParamName:Value[,ParamName:Value[,...]]]
+        host              the target host
         method            specifies the method name
         argv              if arguments are required, this option has to be used.
                           the structure is described above
@@ -77,6 +78,7 @@ MS_PARSER.add_argument("--save", required=False, default=False, type=str)
 CT_PARSER = argparse.ArgumentParser()
 CT_PARSER.add_argument("--method", required=False, default=None, type=str)
 CT_PARSER.add_argument("--argv", required=False, default=None, type=str)
+CT_PARSER.add_argument("--host", required=False, default=None, type=str)
 
 class IDContext(upnp.Context):
   def __init__(self):
@@ -325,7 +327,6 @@ def db_msearch_show_hosts(db, save=False, to=None):
 def db_msearch_enumerate_packets(db, a_p=True, number=-1):
   print("[i] Implementation needed.")
 
-# exe --method ListPresets --argv InstanceID:0
 def db_control_execute(db, namespace):
   q = db.query("dcov")
   if not q:
@@ -341,6 +342,9 @@ def db_control_execute(db, namespace):
   for ud, us, usc in q:
     if service or target:
       break
+
+    if namespace.host and not namespace.host in ud.obj[0]:
+      continue
 
     l = usc.obj[1].get("actionList")
     if not l:
@@ -380,6 +384,6 @@ def db_control_execute(db, namespace):
   print("    or invalid arguments.\n")
   x = soap__response.toprettyxml().split("\n")
   for line in x:
-    if not x or len(x) == 0 or x == "":
+    if not line or len(line) == 0 or line == "\t" or line == "\t\t":
       continue
-    print(x)
+    print(line)
