@@ -20,12 +20,14 @@ __device_ctx_doc__ = """
     > service [--name NAME]
         name              only services with the given name will be printed. 
                           
-    > scpd [--host HOST_ADDRESS] [--name NAME] [--code PATH] 
+    > scpd [--host HOST_ADDRESS] [--name NAME | --all] [--code PATH] 
         host              prints all service-presentation-descriptions linked 
                           to the host
         name              only services with the given name are printed. It 
                           is recommended to use both options in order to get 
                           less output (it will be huge).
+        all               prints and optionally saves all services found to 
+                          that host 
         code              creates a pseudocode document with all actions and
                           variables
 """
@@ -193,7 +195,7 @@ def db_device_lookup(db, namespace):
     h = namespace.host
     for udevice, service, scpd in q:
       url, device__desc = udevice.obj
-      if h in url:
+      if h == url:
         if device__desc.get("deviceType") not in d_types:
           devices.append(udevice.obj)
           d_types.append(device__desc.get("deviceType"))
@@ -203,7 +205,7 @@ def db_device_lookup(db, namespace):
 
     x = namespace.name
     for udevice, service, scpd in q:
-      if x in udevice.obj[0]:
+      if x == udevice.obj[0]:
         if udevice.get("deviceType") not in d_types:
             devices.append(udevice.obj)
             d_types.append(udevice.obj[1].get("deviceType"))
@@ -214,7 +216,7 @@ def db_device_lookup(db, namespace):
       dev = udevice[1]
       print("Name: %s\t- %s" % (dev.get('friendlyName'), dev.get("manufacturer")))
       print("\t|> Model    :", dev.get("modelDescription"))
-      print("\t| Name :", dev.get("modelName"))
+      print("\t\t| Name :", dev.get("modelName"))
       print("\t|> Type     :", dev.get("deviceType"))
       print("\t|> UDN      :", dev.get("UDN"))
       print("\t|> Services :", dev.get("serviceList") is not None)
@@ -260,7 +262,7 @@ def db_scpd_lookup(db, namespace):
       print("    'name' option. Otherwise, too much output will be generated.")
 
     for udev, user, uscpd in q:
-      if namespace.host in udev.obj[0]:
+      if namespace.host == udev.obj[0]:
         services.append((user.obj[1], uscpd.obj))
 
   if namespace.name:
@@ -279,7 +281,7 @@ def db_scpd_lookup(db, namespace):
 
   if len(services) > 0:
     for service, desc in services:
-      print("Service:", service.get("serviceId"), "[", desc[0], "]")
+      print("\nService:", service.get("serviceId"), "[", desc[0], "]")
       al = desc[1].get("actionList")
       vl = desc[1].get("serviceStateTable")
 
@@ -343,7 +345,7 @@ def db_control_execute(db, namespace):
     if service or target:
       break
 
-    if namespace.host and not namespace.host in ud.obj[0]:
+    if namespace.host and not namespace.host == ud.obj[0]:
       continue
 
     l = usc.obj[1].get("actionList")

@@ -37,13 +37,13 @@ class DCovImpl(upnp.UModule):
 
             xml_desc = cElementTree.fromstring(resp.text)
             xml_dev = upnp.device(xml_desc)
-            devices.append((url, xml_dev))
+            devices.append((url, xml_dev, host))
 
         if len(devices) == 0:
             print("(upnp.discover) [ERROR] -c- : no device specified")
 
         full_desc = []
-        for url, device_desc in devices:
+        for url, device_desc, host in devices:
             serv_list = device_desc.get(upnp.dd.devicedesc.NODE_SERVICE_LIST)
             
 
@@ -52,7 +52,7 @@ class DCovImpl(upnp.UModule):
 
             for _service in serv_list:
                 s = upnp.uobject("service", (url, _service))
-                d = upnp.uobject("device", (url, device_desc))
+                d = upnp.uobject("device", (host, device_desc))
                 
                 scpd__url = get_scpd_url(url, _service)
                 for scpd__url0 in upnp.url_fuzz(scpd__url):    
