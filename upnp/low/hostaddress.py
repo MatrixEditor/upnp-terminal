@@ -1,3 +1,4 @@
+from logging import exception
 import socket
 
 def pprint_info():
@@ -23,8 +24,10 @@ def pprint_info():
 def input_address(prompt):
   try:
     x = int(input(prompt)) - 1
-    return (socket.getaddrinfo(socket.gethostname())[x][4][0])
-  except:
+    y = socket.getaddrinfo(socket.gethostname(), 0)
+
+    return y[x][4][0]
+  except Exception as e:
     return None
 
 

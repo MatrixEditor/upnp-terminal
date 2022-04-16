@@ -10,6 +10,8 @@ class ParentContext(upnp.Context):
   def on_action(self, cmd, args= None):
     if cmd == "exit":
       exit(0)
+    else:
+      print("[i] Unknown command:", cmd)
 
 class UPnPInterpreter:
   def __init__(self, db, modules, context) -> None:

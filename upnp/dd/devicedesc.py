@@ -105,7 +105,7 @@ class StateVar(XmlServiceDescription):
   def parse_item(self, item: Element):
     name = getname(item.tag)
 
-    if name in [NODE_NAME, NODE_DEFAULT_VALUE, NODE_DATA_TYPE]:
+    if name in [NODE_NAME, NODE_DEFAULT_VALUE, NODE_DATA_TYPE, "sendEventsAttribute"]:
       self.setdefault(name, item.text)
     elif name == NODE_ALLOWED_LIST:
       allowed = [child.text for child in item]
@@ -332,6 +332,9 @@ def generate_variables(desc, code):
     if "sendEvents" in rsv__attrs:
       if rsv__attrs["sendEvents"].lower() == "yes":
         code_name = " ".join([EVENTING, rsv__name])
+    else:
+      if rsv.get("sendEventsAttribute") == "yes":
+        code_name = " ".join([EVENTING, rsv__name])
       
     if not code_name:
       code_name = rsv__name
@@ -404,7 +407,7 @@ def generate_code(desc, length = 4):
   types = generate_variables(desc, code)
 
   code.append("\n// The types are changed to their real types to")
-  code.append("// make the understanding easier. For instance, think of the following")
+  code.append("// make the understanding easier. For instance, think of the following:")
   code.append("// define string A_ARG_TYPE_HelloWorld -> someMethod(string HelloWorld)\n")
 
   actions = desc[NODE_ACTION_LIST]

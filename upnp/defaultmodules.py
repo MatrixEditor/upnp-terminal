@@ -65,6 +65,8 @@ __control_ctx_doc__ = """
         method            specifies the method name
         argv              if arguments are required, this option has to be used.
                           the structure is described above
+    
+    > call --host URL --method METHOD --service SERVICE [--argv ParamName:Value[,ParamName:Value[,...]]]
         
 """
 
@@ -81,6 +83,7 @@ CT_PARSER = argparse.ArgumentParser()
 CT_PARSER.add_argument("--method", required=False, default=None, type=str)
 CT_PARSER.add_argument("--argv", required=False, default=None, type=str)
 CT_PARSER.add_argument("--host", required=False, default=None, type=str)
+CT_PARSER.add_argument("--service", required=False, default=None, type=str)
 
 class IDContext(upnp.Context):
   def __init__(self):
@@ -163,6 +166,8 @@ class ControlContext(upnp.Context):
 
     if x[0] == "exe":
       db_control_execute(args, argv)
+    elif x[0] == "call":
+      db_control_call(args, argv)
 
     return True
 
@@ -183,6 +188,7 @@ def _print_service_list(s):
 def db_device_lookup(db, namespace):
   devices = []
   d_types = []
+  _device_list = upnp.dd.devicedesc.NODE_DEVICE_LIST
   q = db.query("dcov")
 
   if not q:
@@ -375,6 +381,32 @@ def db_control_execute(db, namespace):
   soap__header = upnp.soap_header(service, namespace.method)
 
   resp = requests.post(url=target, headers=soap__header, data=bytes(soap__body, 'utf-8'))
+  try:
+    soap__response = minidom.parseString(resp.text)
+  except Exception as e:
+    print("[i] Error while reading occurred:", e)
+    return
+
+  print("[i] The system got a response! Usually there will be an error")
+  print("    displayed when looking at the text, due to invalid formatting")
+  print("    or invalid arguments.\n")
+  x = soap__response.toprettyxml().split("\n")
+  for line in x:
+    if not line or len(line) == 0 or line == "\t" or line == "\t\t":
+      continue
+    print(line)
+
+def db_control_call(db, namespace):
+  if namespace.argv:
+    tmp = [x.split(":") for x in namespace.argv.split(",")]
+    args = tmp
+  else:
+    args = []
+
+  soap__body = upnp.soap_body(namespace.service, namespace.method, args)
+  soap__header = upnp.soap_header(namespace.service, namespace.method)
+
+  resp = requests.post(url=namespace.host, headers=soap__header, data=bytes(soap__body, 'utf-8'))
   try:
     soap__response = minidom.parseString(resp.text)
   except Exception as e:

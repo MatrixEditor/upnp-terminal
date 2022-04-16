@@ -37,6 +37,8 @@ class DCovImpl(upnp.UModule):
 
             xml_desc = cElementTree.fromstring(resp.text)
             xml_dev = upnp.device(xml_desc)
+            if 'deviceList' in xml_dev:
+                __add_dev__(xml_dev, devices, url, host)
             devices.append((url, xml_dev, host))
 
         if len(devices) == 0:
@@ -68,3 +70,11 @@ class DCovImpl(upnp.UModule):
 
         obj = upnp.uobject("dcov", full_desc)
         db.pack(obj)
+
+def __add_dev__(xml_dev, devices, url, host):
+    if 'deviceList' in xml_dev:
+        for __device in xml_dev['deviceList']:
+            if 'deviceList' in xml_dev:
+                __add_dev__(__device, devices, url, host)
+            else:
+                devices.append((url, __device, host))
