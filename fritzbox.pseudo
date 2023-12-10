@@ -1,0 +1,16 @@
+@default(0)
+define eventing LogPort as ui2
+
+define eventing LogLevel as string
+
+define eventing Maclist as string
+
+@default(0)
+define eventing MaclistChangeCounter as ui2
+
+
+void def SetLogParam(ui2 NewLogPort, string NewLogLevel);
+
+def GetMaclist() -> tuple:
+	return varNewMaclist, varNewMaclistChangeCounter
+
